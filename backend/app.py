@@ -651,8 +651,9 @@ else:
 # Routes
 @app.route('/')
 def index():
-    interfaces_dir = os.path.abspath(os.path.join(app.root_path, '..', 'Interfaces'))
-    return send_from_directory(interfaces_dir, 'homepage_index.html')
+    # Serve the homepage from Flask templates so `url_for('static', ...)`
+    # is used for asset URLs (more robust in production environments).
+    return render_template('homepage.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])

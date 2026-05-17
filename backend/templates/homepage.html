@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barangay Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav>
+        <div class="logo">Barangay Dashboard</div>
+    </nav>
+
+    <div class="container">
+        <div class="card">
+            <h2>Welcome to the Barangay Dashboard</h2>
+            <p>Access event information and announcements, and manage your document requests with ease.</p>
+        </div>
+
+        <div class="card">
+            <h3>Request a Document</h3>
+            <p>Need a barangay certificate, clearance, or document release? Submit your request here and choose a pickup schedule.</p>
+            <button class="btn btn-primary" onclick="openModal('requestModal')">Request a document</button>
+            <a href="/staff/dashboard" class="btn btn-secondary" style="margin-left: 1rem;">Staff Dashboard</a>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="metric-card">
+                <h3>Upcoming Events</h3>
+                <div id="eventsContainer" class="calendar"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <h3>Important Announcements</h3>
+            <div id="announcementsList" class="announcement-list"></div>
+        </div>
+
+        <div class="card">
+            <h3>Your Recent Requests</h3>
+            <div id="recentRequests"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="requestModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Document Request</h3>
+                <button class="modal-close" onclick="closeModal('requestModal')">&times;</button>
+            </div>
+            <form id="guestRequestForm" onsubmit="submitGuestRequest(event)">
+                <div class="form-group">
+                    <label for="documentSelect">Document Type</label>
+                    <select id="documentSelect" required>
+                        <option value="">Loading documents...</option>
+                    </select>
+                </div>
+                <div class="form-group" id="requirementsList">
+                    <p>Select a document to fill out the required information.</p>
+                </div>
+                <div class="form-group" id="guestFilePreviewGroup" hidden>
+                    <label>Selected File Uploads</label>
+                    <div id="guestFilePreview" style="padding:.75rem;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;min-height:2rem;">
+                        <p style="margin:0;color:#555;">No files selected yet.</p>
+                    </div>
+                </div>
+                <div class="form-group" id="pickupScheduleGroup" hidden>
+                    <label>Pickup Schedule</label>
+                    <div id="modalSlotCalendar" class="pickup-calendar"></div>
+                    <div id="selectedSlotInfo" style="margin-top:0.75rem;color:#555;font-size:0.95rem;">No slot selected yet.</div>
+                    <input type="hidden" id="selectedSlotId" name="slot_id">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Submit Request</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
