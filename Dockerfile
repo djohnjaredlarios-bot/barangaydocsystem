@@ -20,7 +20,7 @@ RUN mkdir -p backend/uploads/digital-documents && \
     mkdir -p database
 
 # Expose port
-EXPOSE $PORT
+EXPOSE 5000
 
 # Run gunicorn
-CMD exec gunicorn app:app --chdir backend --bind 0.0.0.0:$PORT --workers 4 --threads 2 --worker-class sync --timeout 60
+CMD ["sh", "-c", "gunicorn app:app --chdir backend --bind 0.0.0.0:${PORT:-5000} --workers 4 --threads 2 --worker-class sync --timeout 60"]
