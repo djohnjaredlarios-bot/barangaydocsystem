@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav>
+        <div class="logo">Barangay System</div>
+        <div class="user-menu">
+            <span>Welcome, {{ session['name'] }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>Staff Dashboard</h2>
+                <p class="section-intro">Manage resident requests, appointments, and barangay events from one central dashboard.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Upcoming Events Management</h3>
+            </div>
+            <div class="card-body">
+                <p>Manage the barangay's event calendar. Events added here will appear immediately on the public dashboard.</p>
+                <div id="staffEventsCalendar" class="calendar"></div>
+                <div id="eventDetailsPanel" class="calendar-details-panel"></div>
+                <form id="addEventForm" class="section-form">
+                    <div class="form-group">
+                        <label for="eventTitle">Event Title</label>
+                        <input type="text" id="eventTitle" name="eventTitle" required placeholder="Enter event title">
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDate">Date</label>
+                        <input type="date" id="eventDate" name="eventDate" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="eventStartTime">Start Time</label>
+                            <input type="time" id="eventStartTime" name="eventStartTime" placeholder="09:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="eventEndTime">End Time</label>
+                            <input type="time" id="eventEndTime" name="eventEndTime" placeholder="12:00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventLocation">Location</label>
+                        <input type="text" id="eventLocation" name="eventLocation" placeholder="Event location">
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDescription">Description</label>
+                        <textarea id="eventDescription" name="eventDescription" placeholder="Optional event details"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Event</button>
+                </form>
+                <div id="staffEventList" class="section-intro"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Pickup Appointments</h3>
+            </div>
+            <div class="card-body">
+                <div id="pickupAppointmentsBlock">Loading pickup appointments...</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Document Requests & Appointment Schedule</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Resident</th>
+                                <th>Document</th>
+                                <th>Attachment</th>
+                                <th>Delivery</th>
+                                <th>Status</th>
+                                <th>Appointment</th>
+                                <th>Slot</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staffRequestsBody">
+                        {% for req in requests %}
+                        <tr>
+                            <td>{{ req.request_id }}</td>
+                            <td>{{ req.name }}</td>
+                            <td>{{ req.document_name }}</td>
+                            <td>
+                                {% if req.digital_file_url %}
+                                    <a class="btn btn-sm btn-primary" href="{{ req.digital_file_url }}" target="_blank">View</a>
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                                {% if req.attachment_count and req.attachment_count > 0 %}
+                                    <div class="attachment-note">{{ req.attachment_count }} attachment{{ 's' if req.attachment_count > 1 else '' }}</div>
+                                {% endif %}
+                            </td>
+                            <td>{{ req.delivery_method }}</td>
+                            <td><span class="badge badge-{{ req.status|lower }}">{{ req.status }}</span></td>
+                            <td>{{ req.appointment_date or 'Not scheduled' }}</td>
+                            <td>{{ req.time_slot or 'N/A' }}</td>
+                            <td class="request-card">
+                                <button class="btn btn-success" onclick="updateRequestStatus({{ req.request_id }}, 'Processing')">Process</button>
+                                <button class="btn btn-warning" onclick="updateRequestStatus({{ req.request_id }}, 'Approved')">Approve</button>
+                                <button class="btn btn-secondary" onclick="updateRequestStatus({{ req.request_id }}, 'Rejected')">Reject</button>
+                                <button class="btn btn-primary" onclick="updateRequestStatus({{ req.request_id }}, 'Ready')">Mark Ready</button>
+                                <button class="btn btn-info" onclick="viewRequestFiles({{ req.request_id }})">Attachments</button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9">No pending requests to process.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Announcements Management</h3>
+            </div>
+            <div class="card-body">
+                <p>Add announcements that will be visible on the public dashboard.</p>
+                <div id="staffAnnouncementsList" class="announcement-list"></div>
+                <form id="addAnnouncementForm" class="section-form">
+                    <div class="form-group">
+                        <label for="announcementTitle">Title</label>
+                        <input type="text" id="announcementTitle" name="announcementTitle" required placeholder="Announcement title">
+                    </div>
+                    <div class="form-group">
+                        <label for="announcementMessage">Message</label>
+                        <textarea id="announcementMessage" name="announcementMessage" required placeholder="Announcement details"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="announcementDate">Date</label>
+                        <input type="date" id="announcementDate" name="announcementDate" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Post Announcement</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/staff.js') }}"></script>
+</body>
+</html>

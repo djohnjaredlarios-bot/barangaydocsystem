@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resident Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav>
+        <div class="logo">Barangay System</div>
+        <div class="user-menu">
+            <span>Welcome, {{ session['name'] }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>Resident Dashboard</h2>
+                <p>Submit document requests, book appointments, and track your requests.</p>
+            </div>
+        </div>
+        
+        <div class="grid-two">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Submit a Request</h3>
+                </div>
+                <div class="card-body">
+                    <form id="requestForm" onsubmit="submitRequest(event)">
+                        <div class="form-group">
+                            <label for="documentSelect">Document Type</label>
+                            <select id="documentSelect" required>
+                                <option value="">Loading documents...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="deliveryMethodGroup" hidden>
+                            <label for="deliveryMethod">Delivery Method</label>
+                            <select id="deliveryMethod" name="deliveryMethod">
+                                <option value="Physical">Physical</option>
+                                <option value="Digital">Digital</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="documentUploadField" hidden>
+                            <label for="digitalDocumentUpload">Upload Supporting Document</label>
+                            <input type="file" id="digitalDocumentUpload" name="digital_document" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
+                            <div id="digitalDocumentName" class="form-text"></div>
+                            <small class="form-text">Upload your document when selecting digital delivery.</small>
+                        </div>
+                        <div class="form-group" id="requirementsList">
+                            <p class="section-intro">Select a document to view requirements.</p>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit Request</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3>Book Appointment</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="requestIdForAppointment">Choose Request ID</label>
+                        <select id="requestIdForAppointment" required>
+                            <option value="">Select a request</option>
+                            {% for req in requests %}
+                            <option value="{{ req.request_id }}">{{ req.request_id }} - {{ req.document_name }} ({{ req.status }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div id="appointmentSlots"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Upcoming Events</h3>
+                </div>
+                <div class="card-body">
+                    <div id="eventsContainer" class="calendar"></div>
+                    <div id="eventDetailsPanel" class="calendar-details-panel"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Announcements</h3>
+                </div>
+                <div class="card-body">
+                    <div id="announcementsList" class="announcement-list"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card request-table">
+            <div class="card-header">
+                <h3>Your Requests</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Document</th>
+                                <th>Delivery</th>
+                                <th>Status</th>
+                                <th>Document</th>
+                                <th>Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody id="residentRequestsBody">
+                            <tr>
+                                <td colspan="6">Loading requests...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
