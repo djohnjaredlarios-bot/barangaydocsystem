@@ -75,6 +75,18 @@ def init_db():
         ensure_future_appointment_slots()
 
 
+# Ensure DB is initialized when running under WSGI (gunicorn, etc.)
+# Register initialization to run before the app serves requests. Prefer
+# `before_serving` when available (newer Flask versions), fall back to
+# `before_first_request`, and as a last resort call `init_db()` now.
+if hasattr(app, 'before_serving'):
+    app.before_serving(init_db)
+elif hasattr(app, 'before_first_request'):
+    app.before_first_request(init_db)
+else:
+    init_db()
+
+
 def ensure_request_columns():
     cursor = get_db().cursor()
     cursor.execute('PRAGMA table_info(request)')
