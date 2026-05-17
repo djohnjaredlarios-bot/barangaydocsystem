@@ -7,6 +7,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, date, timedelta
 
+# DB type (sqlite or mysql)
+DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
+
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'change-this-secret')
 # Limit uploads to 10 MB
@@ -28,20 +31,81 @@ for env_path in [backend_env, workspace_env]:
                     value = value.strip().strip('"').strip("'")
                     os.environ.setdefault(key, value)
 
+DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 DATABASE_PATH = os.getenv('SQLITE_DB_PATH', os.path.join(os.path.dirname(__file__), 'barangay_system.db'))
-SCHEMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'schema.sql'))
+if DB_TYPE == 'mysql':
+    SCHEMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mysql_schema.sql'))
+else:
+    SCHEMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'schema.sql'))
 VALID_REQUEST_STATUSES = {'Pending', 'Processing', 'Approved', 'Ready', 'Rejected'}
 UPLOAD_FOLDER = os.path.join(app.root_path, 'uploads', 'digital-documents')
 ALLOWED_DIGITAL_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx', 'txt'}
 
 
+class CursorWrapper:
+    """Wraps a DB-API cursor to translate sqlite-style '?' placeholders to
+    MySQL '%s' placeholders when necessary and to expose a consistent
+    interface for the app code.
+    """
+    def __init__(self, cur):
+        self._cur = cur
+
+    def execute(self, sql, params=None):
+        if DB_TYPE == 'mysql' and params is not None:
+            sql = sql.replace('?', '%s')
+        return self._cur.execute(sql, params or ())
+
+    def executemany(self, sql, seq_of_params):
+        if DB_TYPE == 'mysql':
+            sql = sql.replace('?', '%s')
+        return self._cur.executemany(sql, seq_of_params)
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def close(self):
+        try:
+            return self._cur.close()
+        except Exception:
+            pass
+
+    @property
+    def lastrowid(self):
+        return getattr(self._cur, 'lastrowid', None)
+
+    @property
+    def rowcount(self):
+        return getattr(self._cur, 'rowcount', None)
+
+
 def get_db():
     if 'db' not in g:
-        os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
-        connection = sqlite3.connect(DATABASE_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
-        connection.row_factory = sqlite3.Row
-        connection.execute('PRAGMA foreign_keys = ON')
-        g.db = connection
+        if DB_TYPE == 'mysql':
+            try:
+                import pymysql
+                from pymysql.cursors import DictCursor
+            except Exception:
+                raise RuntimeError('PyMySQL is required for MySQL support. Install pymysql.')
+
+            host = os.getenv('MYSQL_HOST', 'localhost')
+            port = int(os.getenv('MYSQL_PORT', '3306'))
+            user = os.getenv('MYSQL_USER', 'root')
+            password = os.getenv('MYSQL_PASSWORD', '')
+            db = os.getenv('MYSQL_DB', 'barangay_system')
+            conn = pymysql.connect(host=host, port=port, user=user, password=password, database=db, cursorclass=DictCursor, autocommit=False)
+            # wrap cursor factory to translate parameter styles
+            orig_cursor = conn.cursor
+            conn.cursor = lambda *args, **kwargs: CursorWrapper(orig_cursor(*args, **kwargs))
+            g.db = conn
+        else:
+            os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+            connection = sqlite3.connect(DATABASE_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
+            connection.row_factory = sqlite3.Row
+            connection.execute('PRAGMA foreign_keys = ON')
+            g.db = connection
     return g.db
 
 
@@ -53,12 +117,35 @@ def close_db(exception=None):
 
 
 def init_db():
-    if not os.path.exists(DATABASE_PATH) or os.path.getsize(DATABASE_PATH) == 0:
-        os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
-        with sqlite3.connect(DATABASE_PATH) as connection:
-            connection.execute('PRAGMA foreign_keys = ON')
-            with open(SCHEMA_PATH, 'r', encoding='utf-8') as schema_file:
-                connection.executescript(schema_file.read())
+    # Create or ensure schema exists depending on DB_TYPE
+    if DB_TYPE == 'mysql':
+        try:
+            import pymysql
+        except Exception:
+            raise RuntimeError('PyMySQL is required for MySQL support. Install pymysql.')
+        host = os.getenv('MYSQL_HOST', 'localhost')
+        port = int(os.getenv('MYSQL_PORT', '3306'))
+        user = os.getenv('MYSQL_USER', 'root')
+        password = os.getenv('MYSQL_PASSWORD', '')
+        db = os.getenv('MYSQL_DB', 'barangay_system')
+        conn = pymysql.connect(host=host, port=port, user=user, password=password, database=db, autocommit=False)
+        try:
+            with conn.cursor() as cur:
+                with open(SCHEMA_PATH, 'r', encoding='utf-8') as schema_file:
+                    sql = schema_file.read()
+                # split statements by semicolon and execute
+                for stmt in [s.strip() for s in sql.split(';') if s.strip()]:
+                    cur.execute(stmt)
+            conn.commit()
+        finally:
+            conn.close()
+    else:
+        if not os.path.exists(DATABASE_PATH) or os.path.getsize(DATABASE_PATH) == 0:
+            os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+            with sqlite3.connect(DATABASE_PATH) as connection:
+                connection.execute('PRAGMA foreign_keys = ON')
+                with open(SCHEMA_PATH, 'r', encoding='utf-8') as schema_file:
+                    connection.executescript(schema_file.read())
 
     with app.app_context():
         ensure_request_columns()
@@ -392,13 +479,12 @@ def seed_appointment_slots(days=7):
 
 def ensure_future_appointment_slots(days=7):
     cursor = get_db().cursor()
-    cursor.execute(
-        '''
+    DATE_NOW = "date('now')" if DB_TYPE == 'sqlite' else 'CURDATE()'
+    cursor.execute(f'''
         SELECT COUNT(*) as count
         FROM appointment_slot
-        WHERE is_available = 1 AND date >= date('now')
-        '''
-    )
+        WHERE is_available = 1 AND date >= {DATE_NOW}
+        ''')
     count = cursor.fetchone()['count']
     if count == 0:
         seed_appointment_slots(days)
@@ -685,13 +771,12 @@ def get_requirements(doc_id):
 def get_available_slots():
     ensure_future_appointment_slots()
     cursor = get_db().cursor()
-    cursor.execute(
-        '''
+    DATE_NOW = "date('now')" if DB_TYPE == 'sqlite' else 'CURDATE()'
+    cursor.execute(f'''
         SELECT * FROM appointment_slot
-        WHERE is_available = 1 AND date >= date('now')
+        WHERE is_available = 1 AND date >= {DATE_NOW}
         ORDER BY date, time_slot
-        '''
-    )
+        ''')
     slots = cursor.fetchall()
     cursor.close()
     return jsonify(serialize_rows(slots))
@@ -755,14 +840,13 @@ def get_guest_requests():
 @app.route('/api/events')
 def get_events():
     cursor = get_db().cursor()
-    cursor.execute(
-        '''
+    DATE_NOW = "date('now')" if DB_TYPE == 'sqlite' else 'CURDATE()'
+    cursor.execute(f'''
         SELECT event_id, title, description, date, time, start_time, end_time, location, created_by
         FROM event
-        WHERE date >= date('now')
+        WHERE date >= {DATE_NOW}
         ORDER BY date, start_time, end_time
-        '''
-    )
+        ''')
     events = cursor.fetchall()
     cursor.close()
     return jsonify(serialize_rows(events))
@@ -927,14 +1011,13 @@ def delete_event(event_id):
 @app.route('/api/announcements')
 def get_announcements():
     cursor = get_db().cursor()
-    cursor.execute(
-        '''
+    DATE_NOW = "date('now')" if DB_TYPE == 'sqlite' else 'CURDATE()'
+    cursor.execute(f'''
         SELECT announcement_id, title, message, date
         FROM announcement
-        WHERE date >= date('now')
+        WHERE date >= {DATE_NOW}
         ORDER BY date
-        '''
-    )
+        ''')
     announcements = cursor.fetchall()
     cursor.close()
     return jsonify(serialize_rows(announcements))
