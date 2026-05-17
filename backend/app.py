@@ -928,6 +928,46 @@ def get_announcements():
     return jsonify(serialize_rows(announcements))
 
 
+@app.route('/debug/status')
+def debug_status():
+    """Debug endpoint that reports DB and table status. Access is intentionally
+    unprotected in this repo for quick diagnosis; remove or protect in prod.
+    """
+    info = {}
+    try:
+        info['database_path'] = DATABASE_PATH
+        info['database_exists'] = os.path.exists(DATABASE_PATH)
+        if info['database_exists']:
+            cursor = get_db().cursor()
+            tables = ['user', 'document', 'request', 'event', 'announcement', 'appointment', 'appointment_slot']
+            counts = {}
+            for t in tables:
+                try:
+                    cursor.execute(f"SELECT COUNT(*) as cnt FROM {t}")
+                    counts[t] = cursor.fetchone()['cnt']
+                except Exception:
+                    counts[t] = None
+            info['counts'] = counts
+            # report recent events and requests presence
+            try:
+                cursor.execute("SELECT event_id, title, date FROM event ORDER BY date DESC LIMIT 5")
+                info['recent_events'] = serialize_rows(cursor.fetchall())
+            except Exception:
+                info['recent_events'] = []
+            try:
+                cursor.execute("SELECT request_id, request_date, status FROM request ORDER BY created_at DESC LIMIT 5")
+                info['recent_requests'] = serialize_rows(cursor.fetchall())
+            except Exception:
+                info['recent_requests'] = []
+            cursor.close()
+        else:
+            info['message'] = 'Database file does not exist on disk.'
+    except Exception as e:
+        info['error'] = str(e)
+
+    return jsonify(info)
+
+
 @app.route('/api/staff/announcements', methods=['POST'])
 def create_staff_announcement():
     if 'user_id' not in session or session['role'] != 'Staff':
