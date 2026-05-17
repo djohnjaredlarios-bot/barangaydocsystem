@@ -937,28 +937,65 @@ def debug_status():
     try:
         info['database_path'] = DATABASE_PATH
         info['database_exists'] = os.path.exists(DATABASE_PATH)
+        try:
+            info['database_size_bytes'] = os.path.getsize(DATABASE_PATH) if info['database_exists'] else 0
+        except Exception:
+            info['database_size_bytes'] = None
+
         if info['database_exists']:
             cursor = get_db().cursor()
-            tables = ['user', 'document', 'request', 'event', 'announcement', 'appointment', 'appointment_slot']
+            # list tables from sqlite_master
+            try:
+                cursor.execute("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name")
+                objs = cursor.fetchall()
+                info['sqlite_objects'] = [{'name': r['name'], 'type': r['type'], 'sql': r['sql']} for r in objs]
+            except Exception as e:
+                info['sqlite_objects_error'] = str(e)
+
+            # counts for any present tables
+            try:
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                table_rows = cursor.fetchall()
+                table_names = [r['name'] for r in table_rows]
+                info['tables'] = table_names
+            except Exception as e:
+                info['tables_error'] = str(e)
+                table_names = []
+
             counts = {}
-            for t in tables:
+            for t in table_names:
                 try:
                     cursor.execute(f"SELECT COUNT(*) as cnt FROM {t}")
                     counts[t] = cursor.fetchone()['cnt']
-                except Exception:
-                    counts[t] = None
+                except Exception as e:
+                    counts[t] = {'error': str(e)}
             info['counts'] = counts
-            # report recent events and requests presence
+
+            # run integrity check
             try:
-                cursor.execute("SELECT event_id, title, date FROM event ORDER BY date DESC LIMIT 5")
-                info['recent_events'] = serialize_rows(cursor.fetchall())
-            except Exception:
+                cursor.execute("PRAGMA integrity_check")
+                info['integrity_check'] = [r[0] for r in cursor.fetchall()]
+            except Exception as e:
+                info['integrity_check_error'] = str(e)
+
+            # sample recent rows if those tables exist
+            def safe_fetch(sql):
+                try:
+                    cursor.execute(sql)
+                    return serialize_rows(cursor.fetchall())
+                except Exception:
+                    return []
+
+            if 'event' in table_names:
+                info['recent_events'] = safe_fetch("SELECT event_id, title, date FROM event ORDER BY date DESC LIMIT 5")
+            else:
                 info['recent_events'] = []
-            try:
-                cursor.execute("SELECT request_id, request_date, status FROM request ORDER BY created_at DESC LIMIT 5")
-                info['recent_requests'] = serialize_rows(cursor.fetchall())
-            except Exception:
+
+            if 'request' in table_names:
+                info['recent_requests'] = safe_fetch("SELECT request_id, request_date, status FROM request ORDER BY created_at DESC LIMIT 5")
+            else:
                 info['recent_requests'] = []
+
             cursor.close()
         else:
             info['message'] = 'Database file does not exist on disk.'
