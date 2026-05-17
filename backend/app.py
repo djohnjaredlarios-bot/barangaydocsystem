@@ -37,6 +37,7 @@ if DB_TYPE == 'mysql':
     SCHEMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mysql_schema.sql'))
 else:
     SCHEMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'schema.sql'))
+DB_INITIALIZED = False
 VALID_REQUEST_STATUSES = {'Pending', 'Processing', 'Approved', 'Ready', 'Rejected'}
 UPLOAD_FOLDER = os.path.join(app.root_path, 'uploads', 'digital-documents')
 ALLOWED_DIGITAL_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx', 'txt'}
@@ -116,7 +117,30 @@ def close_db(exception=None):
         db.close()
 
 
+def get_table_columns(table_name):
+    cursor = get_db().cursor()
+    try:
+        if DB_TYPE == 'sqlite':
+            cursor.execute(f'PRAGMA table_info({table_name})')
+            columns = [row['name'] for row in cursor.fetchall()]
+        else:
+            cursor.execute(
+                'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS '
+                'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                (table_name,)
+            )
+            columns = [row['COLUMN_NAME'] for row in cursor.fetchall()]
+        return columns
+    finally:
+        cursor.close()
+
+
 def init_db():
+    global DB_INITIALIZED
+    if DB_INITIALIZED:
+        return
+    DB_INITIALIZED = True
+
     # Create or ensure schema exists depending on DB_TYPE
     if DB_TYPE == 'mysql':
         try:
@@ -162,42 +186,34 @@ def init_db():
         ensure_future_appointment_slots()
 
 
-# Ensure DB is initialized when running under WSGI (gunicorn, etc.)
-# Register initialization to run before the app serves requests. Prefer
-# `before_serving` when available (newer Flask versions), fall back to
-# `before_first_request`, and as a last resort call `init_db()` now.
-if hasattr(app, 'before_serving'):
-    app.before_serving(init_db)
-elif hasattr(app, 'before_first_request'):
-    app.before_first_request(init_db)
-else:
-    init_db()
-
-
 def ensure_request_columns():
+    existing_columns = get_table_columns('request')
+
     cursor = get_db().cursor()
-    cursor.execute('PRAGMA table_info(request)')
-    existing_columns = [row['name'] for row in cursor.fetchall()]
-
-    if 'requester_name' not in existing_columns:
-        cursor.execute('ALTER TABLE request ADD COLUMN requester_name TEXT')
-    if 'requester_status' not in existing_columns:
-        cursor.execute('ALTER TABLE request ADD COLUMN requester_status TEXT')
-    if 'requester_contact' not in existing_columns:
-        cursor.execute('ALTER TABLE request ADD COLUMN requester_contact TEXT')
-    if 'civil_status' not in existing_columns:
-        cursor.execute('ALTER TABLE request ADD COLUMN civil_status TEXT')
-    if 'age' not in existing_columns:
-        cursor.execute('ALTER TABLE request ADD COLUMN age INTEGER')
-    if 'claiming_method' not in existing_columns:
-        cursor.execute('ALTER TABLE request ADD COLUMN claiming_method TEXT')
-    if 'visitor_token' not in existing_columns:
-        cursor.execute('ALTER TABLE request ADD COLUMN visitor_token TEXT')
-
-    get_db().commit()
+    try:
+        if 'requester_name' not in existing_columns:
+            cursor.execute('ALTER TABLE request ADD COLUMN requester_name TEXT')
+        if 'requester_status' not in existing_columns:
+            cursor.execute('ALTER TABLE request ADD COLUMN requester_status TEXT')
+        if 'requester_contact' not in existing_columns:
+            cursor.execute('ALTER TABLE request ADD COLUMN requester_contact TEXT')
+        if 'civil_status' not in existing_columns:
+            cursor.execute('ALTER TABLE request ADD COLUMN civil_status TEXT')
+        if 'age' not in existing_columns:
+            cursor.execute('ALTER TABLE request ADD COLUMN age INTEGER')
+        if 'claiming_method' not in existing_columns:
+            cursor.execute('ALTER TABLE request ADD COLUMN claiming_method TEXT')
+        if 'visitor_token' not in existing_columns:
+            cursor.execute('ALTER TABLE request ADD COLUMN visitor_token TEXT')
+        get_db().commit()
+    finally:
+        cursor.close()
 
 
 def ensure_request_status_values():
+    if DB_TYPE == 'mysql':
+        return
+
     cursor = get_db().cursor()
     cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'request'")
     table = cursor.fetchone()
@@ -309,112 +325,187 @@ def is_allowed_digital_file(filename):
 
 
 def ensure_document_columns():
-    cursor = get_db().cursor()
-    cursor.execute('PRAGMA table_info(document)')
-    existing_columns = [row['name'] for row in cursor.fetchall()]
-
+    existing_columns = get_table_columns('document')
     if 'category' not in existing_columns:
-        cursor.execute('ALTER TABLE document ADD COLUMN category TEXT')
-        get_db().commit()
+        cursor = get_db().cursor()
+        try:
+            cursor.execute('ALTER TABLE document ADD COLUMN category TEXT')
+            get_db().commit()
+        finally:
+            cursor.close()
 
 
 def ensure_requirement_is_file_column():
+    existing = get_table_columns('document_requirement')
     cursor = get_db().cursor()
-    cursor.execute('PRAGMA table_info(document_requirement)')
-    existing = [row['name'] for row in cursor.fetchall()]
-    if 'is_file' not in existing:
-        cursor.execute('ALTER TABLE document_requirement ADD COLUMN is_file INTEGER DEFAULT 0')
-        get_db().commit()
+    try:
+        if 'is_file' not in existing:
+            cursor.execute('ALTER TABLE document_requirement ADD COLUMN is_file INTEGER DEFAULT 0')
+            get_db().commit()
 
-        # Mark common requirements as file-type by default
-        file_like = ['Valid ID', 'Proof of Residency', 'Birth Certificate', '2x2 Photo', 'Utility Bill', 'Affidavit of Indigency', 'Business Permit Form']
-        for name in file_like:
-            try:
-                cursor.execute('UPDATE document_requirement SET is_file = 1 WHERE requirement_name = ?', (name,))
-            except Exception:
-                pass
-        get_db().commit()
-    cursor.close()
+            # Mark common requirements as file-type by default
+            file_like = ['Valid ID', 'Proof of Residency', 'Birth Certificate', '2x2 Photo', 'Utility Bill', 'Affidavit of Indigency', 'Business Permit Form']
+            for name in file_like:
+                try:
+                    cursor.execute('UPDATE document_requirement SET is_file = 1 WHERE requirement_name = ?', (name,))
+                except Exception:
+                    pass
+            get_db().commit()
+    finally:
+        cursor.close()
 
 
 def ensure_request_detail_table():
     cursor = get_db().cursor()
-    cursor.execute(
-        '''
-        CREATE TABLE IF NOT EXISTS request_detail (
-            detail_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            request_id INTEGER NOT NULL,
-            field_name TEXT NOT NULL,
-            field_value TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (request_id) REFERENCES request(request_id) ON DELETE CASCADE
-        )
-        '''
-    )
-    get_db().commit()
-    cursor.close()
+    try:
+        if DB_TYPE == 'mysql':
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS request_detail (
+                    detail_id INT AUTO_INCREMENT PRIMARY KEY,
+                    request_id INT NOT NULL,
+                    field_name TEXT NOT NULL,
+                    field_value TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (request_id) REFERENCES request(request_id) ON DELETE CASCADE
+                )
+                '''
+            )
+        else:
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS request_detail (
+                    detail_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id INTEGER NOT NULL,
+                    field_name TEXT NOT NULL,
+                    field_value TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (request_id) REFERENCES request(request_id) ON DELETE CASCADE
+                )
+                '''
+            )
+        get_db().commit()
+    finally:
+        cursor.close()
 
 
 def ensure_request_attachments_table():
     cursor = get_db().cursor()
-    cursor.execute(
-        '''
-        CREATE TABLE IF NOT EXISTS request_attachment (
-            attachment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            request_id INTEGER NOT NULL,
-            requirement_id INTEGER,
-            file_path TEXT,
-            file_url TEXT,
-            original_filename TEXT,
-            uploaded_by INTEGER,
-            upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (request_id) REFERENCES request(request_id) ON DELETE CASCADE,
-            FOREIGN KEY (requirement_id) REFERENCES document_requirement(requirement_id) ON DELETE SET NULL,
-            FOREIGN KEY (uploaded_by) REFERENCES user(user_id) ON DELETE SET NULL
-        )
-        '''
-    )
-    get_db().commit()
-    cursor.close()
+    try:
+        if DB_TYPE == 'mysql':
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS request_attachment (
+                    attachment_id INT AUTO_INCREMENT PRIMARY KEY,
+                    request_id INT NOT NULL,
+                    requirement_id INT,
+                    file_path TEXT,
+                    file_url TEXT,
+                    original_filename TEXT,
+                    uploaded_by INT,
+                    upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (request_id) REFERENCES request(request_id) ON DELETE CASCADE,
+                    FOREIGN KEY (requirement_id) REFERENCES document_requirement(requirement_id) ON DELETE SET NULL,
+                    FOREIGN KEY (uploaded_by) REFERENCES user(user_id) ON DELETE SET NULL
+                )
+                '''
+            )
+        else:
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS request_attachment (
+                    attachment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id INTEGER NOT NULL,
+                    requirement_id INTEGER,
+                    file_path TEXT,
+                    file_url TEXT,
+                    original_filename TEXT,
+                    uploaded_by INTEGER,
+                    upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (request_id) REFERENCES request(request_id) ON DELETE CASCADE,
+                    FOREIGN KEY (requirement_id) REFERENCES document_requirement(requirement_id) ON DELETE SET NULL,
+                    FOREIGN KEY (uploaded_by) REFERENCES user(user_id) ON DELETE SET NULL
+                )
+                '''
+            )
+        get_db().commit()
+    finally:
+        cursor.close()
 
 
 def ensure_event_announcement_tables():
     cursor = get_db().cursor()
-    cursor.execute(
-        '''
-        CREATE TABLE IF NOT EXISTS event (
-            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            date DATE NOT NULL,
-            time TEXT,
-            start_time TEXT,
-            end_time TEXT,
-            location TEXT,
-            created_by INTEGER,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-        '''
-    )
-    existing_columns = [row['name'] for row in cursor.execute('PRAGMA table_info(event)').fetchall()]
-    if 'start_time' not in existing_columns:
-        cursor.execute('ALTER TABLE event ADD COLUMN start_time TEXT')
-    if 'end_time' not in existing_columns:
-        cursor.execute('ALTER TABLE event ADD COLUMN end_time TEXT')
-    if 'created_by' not in existing_columns:
-        cursor.execute('ALTER TABLE event ADD COLUMN created_by INTEGER')
-    cursor.execute(
-        '''
-        CREATE TABLE IF NOT EXISTS announcement (
-            announcement_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            message TEXT NOT NULL,
-            date DATE NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-        '''
-    )
-    get_db().commit()
+    try:
+        if DB_TYPE == 'mysql':
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS event (
+                    event_id INT AUTO_INCREMENT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    date DATE NOT NULL,
+                    time TEXT,
+                    start_time TEXT,
+                    end_time TEXT,
+                    location TEXT,
+                    created_by INT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                '''
+            )
+        else:
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS event (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    date DATE NOT NULL,
+                    time TEXT,
+                    start_time TEXT,
+                    end_time TEXT,
+                    location TEXT,
+                    created_by INTEGER,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                '''
+            )
+
+        existing_columns = get_table_columns('event')
+        if 'start_time' not in existing_columns:
+            cursor.execute('ALTER TABLE event ADD COLUMN start_time TEXT')
+        if 'end_time' not in existing_columns:
+            cursor.execute('ALTER TABLE event ADD COLUMN end_time TEXT')
+        if 'created_by' not in existing_columns:
+            cursor.execute('ALTER TABLE event ADD COLUMN created_by INTEGER')
+
+        if DB_TYPE == 'mysql':
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS announcement (
+                    announcement_id INT AUTO_INCREMENT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    date DATE NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                '''
+            )
+        else:
+            cursor.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS announcement (
+                    announcement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    date DATE NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                '''
+            )
+        get_db().commit()
+    finally:
+        cursor.close()
 
 
 def seed_documents():
@@ -467,13 +558,12 @@ def seed_appointment_slots(days=7):
     for day_offset in range(1, days + 1):
         slot_date = (today + timedelta(days=day_offset)).isoformat()
         for time_slot in time_slots:
-            cursor.execute(
-                '''
-                INSERT OR IGNORE INTO appointment_slot (date, time_slot, is_available)
-                VALUES (?, ?, 1)
-                ''',
-                (slot_date, time_slot)
+            sql = (
+                'INSERT OR IGNORE INTO appointment_slot (date, time_slot, is_available) VALUES (?, ?, 1)'
+                if DB_TYPE == 'sqlite'
+                else 'INSERT IGNORE INTO appointment_slot (date, time_slot, is_available) VALUES (?, ?, 1)'
             )
+            cursor.execute(sql, (slot_date, time_slot))
     get_db().commit()
 
 
@@ -544,6 +634,18 @@ def ensure_default_accounts():
             )
     get_db().commit()
     cursor.close()
+
+
+# Ensure DB is initialized when running under WSGI (gunicorn, etc.)
+# Register initialization to run before the app serves requests. Prefer
+# `before_serving` when available (newer Flask versions), fall back to
+# `before_request`, and as a last resort call `init_db()` now.
+if hasattr(app, 'before_serving'):
+    app.before_serving(init_db)
+elif hasattr(app, 'before_request'):
+    app.before_request(init_db)
+else:
+    init_db()
 
 
 # Routes
@@ -621,7 +723,7 @@ def logout():
 # Resident routes
 @app.route('/resident/dashboard')
 def resident_dashboard():
-    if 'user_id' not in session or session['role'] != 'Resident':
+    if 'user_id' not in session or session.get('role') != 'Resident':
         return redirect(url_for('login'))
 
     user_id = session['user_id']
@@ -784,7 +886,7 @@ def get_available_slots():
 
 @app.route('/api/resident/requests')
 def get_resident_requests():
-    if 'user_id' not in session or session['role'] != 'Resident':
+    if 'user_id' not in session or session.get('role') != 'Resident':
         return jsonify({'error': 'Unauthorized'}), 401
 
     cursor = get_db().cursor()
@@ -855,7 +957,7 @@ def get_events():
 @app.route('/api/events', methods=['POST'])
 @app.route('/api/staff/events', methods=['POST'])
 def create_event():
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     data = request.json or {}
@@ -944,7 +1046,7 @@ def dev_create_event():
 
 @app.route('/api/events/<int:event_id>', methods=['PUT'])
 def update_event(event_id):
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     data = request.json or {}
@@ -994,7 +1096,7 @@ def update_event(event_id):
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 def delete_event(event_id):
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     cursor = get_db().cursor()
@@ -1030,28 +1132,18 @@ def debug_status():
     """
     info = {}
     try:
-        info['database_path'] = DATABASE_PATH
-        info['database_exists'] = os.path.exists(DATABASE_PATH)
-        try:
-            info['database_size_bytes'] = os.path.getsize(DATABASE_PATH) if info['database_exists'] else 0
-        except Exception:
+        info['database_type'] = DB_TYPE
+        if DB_TYPE == 'mysql':
+            info['database_path'] = None
+            info['database_exists'] = True
             info['database_size_bytes'] = None
-
-        if info['database_exists']:
             cursor = get_db().cursor()
-            # list tables from sqlite_master
             try:
-                cursor.execute("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name")
-                objs = cursor.fetchall()
-                info['sqlite_objects'] = [{'name': r['name'], 'type': r['type'], 'sql': r['sql']} for r in objs]
-            except Exception as e:
-                info['sqlite_objects_error'] = str(e)
-
-            # counts for any present tables
-            try:
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                cursor.execute(
+                    'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()'
+                )
                 table_rows = cursor.fetchall()
-                table_names = [r['name'] for r in table_rows]
+                table_names = [r['TABLE_NAME'] for r in table_rows]
                 info['tables'] = table_names
             except Exception as e:
                 info['tables_error'] = str(e)
@@ -1060,18 +1152,11 @@ def debug_status():
             counts = {}
             for t in table_names:
                 try:
-                    cursor.execute(f"SELECT COUNT(*) as cnt FROM {t}")
+                    cursor.execute(f"SELECT COUNT(*) AS cnt FROM `{t}`")
                     counts[t] = cursor.fetchone()['cnt']
                 except Exception as e:
                     counts[t] = {'error': str(e)}
             info['counts'] = counts
-
-            # run integrity check
-            try:
-                cursor.execute("PRAGMA integrity_check")
-                info['integrity_check'] = [r[0] for r in cursor.fetchall()]
-            except Exception as e:
-                info['integrity_check_error'] = str(e)
 
             # sample recent rows if those tables exist
             def safe_fetch(sql):
@@ -1093,7 +1178,70 @@ def debug_status():
 
             cursor.close()
         else:
-            info['message'] = 'Database file does not exist on disk.'
+            info['database_path'] = DATABASE_PATH
+            info['database_exists'] = os.path.exists(DATABASE_PATH)
+            try:
+                info['database_size_bytes'] = os.path.getsize(DATABASE_PATH) if info['database_exists'] else 0
+            except Exception:
+                info['database_size_bytes'] = None
+
+            if info['database_exists']:
+                cursor = get_db().cursor()
+                # list tables from sqlite_master
+                try:
+                    cursor.execute("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name")
+                    objs = cursor.fetchall()
+                    info['sqlite_objects'] = [{'name': r['name'], 'type': r['type'], 'sql': r['sql']} for r in objs]
+                except Exception as e:
+                    info['sqlite_objects_error'] = str(e)
+
+                # counts for any present tables
+                try:
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    table_rows = cursor.fetchall()
+                    table_names = [r['name'] for r in table_rows]
+                    info['tables'] = table_names
+                except Exception as e:
+                    info['tables_error'] = str(e)
+                    table_names = []
+
+                counts = {}
+                for t in table_names:
+                    try:
+                        cursor.execute(f"SELECT COUNT(*) as cnt FROM {t}")
+                        counts[t] = cursor.fetchone()['cnt']
+                    except Exception as e:
+                        counts[t] = {'error': str(e)}
+                info['counts'] = counts
+
+                # run integrity check
+                try:
+                    cursor.execute("PRAGMA integrity_check")
+                    info['integrity_check'] = [r[0] for r in cursor.fetchall()]
+                except Exception as e:
+                    info['integrity_check_error'] = str(e)
+
+                # sample recent rows if those tables exist
+                def safe_fetch(sql):
+                    try:
+                        cursor.execute(sql)
+                        return serialize_rows(cursor.fetchall())
+                    except Exception:
+                        return []
+
+                if 'event' in table_names:
+                    info['recent_events'] = safe_fetch("SELECT event_id, title, date FROM event ORDER BY date DESC LIMIT 5")
+                else:
+                    info['recent_events'] = []
+
+                if 'request' in table_names:
+                    info['recent_requests'] = safe_fetch("SELECT request_id, request_date, status FROM request ORDER BY created_at DESC LIMIT 5")
+                else:
+                    info['recent_requests'] = []
+
+                cursor.close()
+            else:
+                info['message'] = 'Database file does not exist on disk.'
     except Exception as e:
         info['error'] = str(e)
 
@@ -1102,7 +1250,7 @@ def debug_status():
 
 @app.route('/api/staff/announcements', methods=['POST'])
 def create_staff_announcement():
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     data = request.json
@@ -1355,7 +1503,7 @@ def book_appointment():
 # Staff routes
 @app.route('/staff/dashboard')
 def staff_dashboard():
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return render_template('login.html', staff_login=True)
 
     cursor = get_db().cursor()
@@ -1385,7 +1533,7 @@ def staff_dashboard():
 
 @app.route('/api/staff/requests')
 def get_staff_requests():
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     cursor = get_db().cursor()
@@ -1415,7 +1563,7 @@ def get_staff_requests():
 
 @app.route('/api/staff/pickup-appointments')
 def get_staff_pickup_appointments():
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     cursor = get_db().cursor()
@@ -1463,7 +1611,7 @@ def get_request_files(req_id):
 
 @app.route('/api/staff/requests/<int:req_id>/digital-document', methods=['POST'])
 def upload_digital_document(req_id):
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     uploaded_file = request.files.get('digital_document')
@@ -1614,7 +1762,7 @@ def download_digital_document(filename):
 
 @app.route('/staff/process-request/<int:req_id>', methods=['POST'])
 def process_request(req_id):
-    if 'user_id' not in session or session['role'] != 'Staff':
+    if 'user_id' not in session or session.get('role') != 'Staff':
         return jsonify({'error': 'Unauthorized'}), 401
 
     data = request.json
@@ -1654,7 +1802,7 @@ def process_request(req_id):
 # Admin routes
 @app.route('/admin/dashboard')
 def admin_dashboard():
-    if 'user_id' not in session or session['role'] != 'Admin':
+    if 'user_id' not in session or session.get('role') != 'Admin':
         return redirect(url_for('login'))
 
     cursor = get_db().cursor()
@@ -1695,4 +1843,5 @@ def get_metrics():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, port=5000)
+    port = int(os.getenv('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
