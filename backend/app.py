@@ -34,7 +34,16 @@ for env_path in [backend_env, workspace_env]:
                     value = value.strip().strip('"').strip("'")
                     os.environ.setdefault(key, value)
 
-ASSET_VERSION = os.getenv('ASSET_VERSION', '1')
+ASSET_VERSION = os.getenv('ASSET_VERSION')
+# If not provided via environment, derive asset version from the
+# main stylesheet mtime so deployments automatically bust caches
+# when static files change.
+if not ASSET_VERSION:
+    try:
+        css_file = os.path.join(static_dir, 'css', 'style.css')
+        ASSET_VERSION = str(int(os.path.getmtime(css_file)))
+    except Exception:
+        ASSET_VERSION = '1'
 DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 DATABASE_PATH = os.getenv('SQLITE_DB_PATH', os.path.join(os.path.dirname(__file__), 'barangay_system.db'))
 if DB_TYPE == 'mysql':
