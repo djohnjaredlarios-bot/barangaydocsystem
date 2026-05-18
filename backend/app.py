@@ -10,7 +10,9 @@ from datetime import datetime, date, timedelta
 # DB type (sqlite or mysql)
 DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 
-app = Flask(__name__)
+static_dir = os.path.join(os.path.dirname(__file__), 'static')
+template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+app = Flask(__name__, static_folder=static_dir, template_folder=template_dir)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'change-this-secret')
 # Limit uploads to 10 MB
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
