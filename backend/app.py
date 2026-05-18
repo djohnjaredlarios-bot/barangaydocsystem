@@ -2,9 +2,10 @@ import os
 import json
 import sqlite3
 import uuid
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, g
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, g, Response, stream_with_context
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+import mimetypes
 from datetime import datetime, date, timedelta
 
 # DB type (sqlite or mysql)
@@ -584,25 +585,48 @@ def ensure_future_appointment_slots(days=7):
 
 def get_guest_user_id():
     cursor = get_db().cursor()
-    cursor.execute('SELECT user_id FROM user WHERE email = ?', ('guest@example.com',))
-    user = cursor.fetchone()
-    if user:
-        user_id = user['user_id']
-        cursor.close()
-        return user_id
+    try:
+        cursor.execute('SELECT user_id FROM user WHERE email = ?', ('guest@example.com',))
+        user = cursor.fetchone()
+        if user:
+            return user['user_id']
 
-    hashed_password = generate_password_hash('guest')
-    cursor.execute(
-        '''
-        INSERT INTO user (name, email, password, role, contact_number, address)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''',
-        ('Guest User', 'guest@example.com', hashed_password, 'Resident', 'N/A', 'N/A')
-    )
-    get_db().commit()
-    user_id = cursor.lastrowid
-    cursor.close()
-    return user_id
+        hashed_password = generate_password_hash('guest')
+        # Use DB-specific upsert/ignore to avoid race conditions across processes
+        try:
+            if DB_TYPE == 'sqlite':
+                cursor.execute(
+                    '''
+                    INSERT OR IGNORE INTO user (name, email, password, role, contact_number, address)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ''' ,
+                    ('Guest User', 'guest@example.com', hashed_password, 'Resident', 'N/A', 'N/A')
+                )
+            else:
+                # MySQL: INSERT IGNORE
+                cursor.execute(
+                    '''
+                    INSERT IGNORE INTO user (name, email, password, role, contact_number, address)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ''',
+                    ('Guest User', 'guest@example.com', hashed_password, 'Resident', 'N/A', 'N/A')
+                )
+            get_db().commit()
+        except Exception:
+            try:
+                get_db().rollback()
+            except Exception:
+                pass
+
+        # Re-query to fetch id (works whether insert happened here or on another process)
+        cursor.execute('SELECT user_id FROM user WHERE email = ?', ('guest@example.com',))
+        user = cursor.fetchone()
+        if user:
+            return user['user_id']
+        # As a fallback, raise an error
+        raise RuntimeError('Unable to create or locate guest user')
+    finally:
+        cursor.close()
 
 
 def ensure_default_accounts():
@@ -1760,7 +1784,27 @@ def download_digital_document(filename):
     if not (is_staff or is_owner or is_guest_owner):
         return jsonify({'error': 'Unauthorized'}), 401
 
-    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+    # Stream the file manually to avoid gunicorn/sendfile issues on non-blocking sockets
+    full_path = os.path.join(UPLOAD_FOLDER, filename)
+    if not os.path.exists(full_path):
+        return jsonify({'error': 'File not found'}), 404
+
+    mime_type, _ = mimetypes.guess_type(full_path)
+    if not mime_type:
+        mime_type = 'application/octet-stream'
+
+    def generate():
+        with open(full_path, 'rb') as fh:
+            while True:
+                chunk = fh.read(8192)
+                if not chunk:
+                    break
+                yield chunk
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{os.path.basename(full_path)}"'
+    }
+    return Response(stream_with_context(generate()), mimetype=mime_type, headers=headers)
 
 
 @app.route('/staff/process-request/<int:req_id>', methods=['POST'])
