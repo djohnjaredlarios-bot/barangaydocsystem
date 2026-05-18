@@ -1000,16 +1000,16 @@ async function handleLogin(event) {
         const response = await fetch('/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ email, password })
         });
 
-        if (response.redirected) {
-            window.location.href = response.url;
-            return;
-        }
-
         const loginData = await response.json();
         if (response.ok) {
+            if (loginData.redirect_to) {
+                window.location.href = loginData.redirect_to;
+                return;
+            }
             window.location.href = '/resident/dashboard';
         } else {
             showAlert(loginData.error || 'Invalid email or password', 'danger');

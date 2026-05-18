@@ -698,12 +698,15 @@ def login():
             session['role'] = user['role']
             session['name'] = user['name']
 
+            redirect_url = url_for('resident_dashboard')
             if user['role'] == 'Admin':
-                return redirect(url_for('admin_dashboard'))
+                redirect_url = url_for('admin_dashboard')
             elif user['role'] == 'Staff':
-                return redirect(url_for('staff_dashboard'))
-            else:
-                return redirect(url_for('resident_dashboard'))
+                redirect_url = url_for('staff_dashboard')
+
+            if request.is_json:
+                return jsonify({'redirect_to': redirect_url}), 200
+            return redirect(redirect_url)
         else:
             return jsonify({'error': 'Invalid credentials'}), 401
 
