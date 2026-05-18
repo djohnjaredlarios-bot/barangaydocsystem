@@ -2,7 +2,7 @@ import os
 import json
 import sqlite3
 import uuid
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, g, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g, Response, stream_with_context
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import mimetypes
@@ -11,9 +11,10 @@ from datetime import datetime, date, timedelta
 # DB type (sqlite or mysql)
 DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 
-static_dir = os.path.join(os.path.dirname(__file__), 'static')
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-app = Flask(__name__, static_folder=static_dir, static_url_path='/static', template_folder=template_dir)
+app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder=template_dir)
+static_dir = app.static_folder
+
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'change-this-secret')
 # Limit uploads to 10 MB
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
