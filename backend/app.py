@@ -13,7 +13,7 @@ DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 
 static_dir = os.path.join(os.path.dirname(__file__), 'static')
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-app = Flask(__name__, static_folder=static_dir, template_folder=template_dir)
+app = Flask(__name__, static_folder=static_dir, static_url_path='/static', template_folder=template_dir)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'change-this-secret')
 # Limit uploads to 10 MB
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -34,6 +34,7 @@ for env_path in [backend_env, workspace_env]:
                     value = value.strip().strip('"').strip("'")
                     os.environ.setdefault(key, value)
 
+ASSET_VERSION = os.getenv('ASSET_VERSION', '1')
 DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 DATABASE_PATH = os.getenv('SQLITE_DB_PATH', os.path.join(os.path.dirname(__file__), 'barangay_system.db'))
 if DB_TYPE == 'mysql':
@@ -44,6 +45,11 @@ DB_INITIALIZED = False
 VALID_REQUEST_STATUSES = {'Pending', 'Processing', 'Approved', 'Ready', 'Rejected'}
 UPLOAD_FOLDER = os.path.join(app.root_path, 'uploads', 'digital-documents')
 ALLOWED_DIGITAL_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx', 'txt'}
+
+
+@app.context_processor
+def inject_asset_version():
+    return {'asset_version': ASSET_VERSION}
 
 
 class CursorWrapper:
