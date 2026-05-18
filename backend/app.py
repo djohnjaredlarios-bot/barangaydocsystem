@@ -13,7 +13,14 @@ DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 
 static_dir = os.path.join(os.path.dirname(__file__), 'static')
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-app = Flask(__name__, static_folder=static_dir, static_url_path='/static', template_folder=template_dir)
+app = Flask(__name__, static_folder=None, template_folder=template_dir)
+
+# Serve static assets explicitly so mounted deploy platforms always resolve
+# backend/static correctly, even when Flask app roots are proxied or hosted.
+@app.route('/static/<path:filename>', endpoint='static')
+def serve_static(filename):
+    return send_from_directory(static_dir, filename)
+
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'change-this-secret')
 # Limit uploads to 10 MB
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
