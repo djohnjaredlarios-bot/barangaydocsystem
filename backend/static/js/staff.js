@@ -506,7 +506,6 @@ async function uploadDigitalDocument(requestId) {
         console.error(error);
         showAlert(error.message, 'danger');
     }
-}
 
 function renderDigitalUploadAction(req) {
     if (req.delivery_method !== 'Digital' && req.requires_upload !== 1) return '';
