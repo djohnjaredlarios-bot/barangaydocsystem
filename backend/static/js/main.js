@@ -74,15 +74,19 @@ function updateDeliveryMethodVisibility(documentId) {
     if (deliveryMethodGroup) {
         deliveryMethodGroup.hidden = false;
         if (deliveryMethod) {
-            deliveryMethod.value = 'Physical';
-            if (!selectedDocument.is_digital_available) {
-                deliveryMethod.querySelector('option[value="Digital"]').disabled = true;
-                deliveryMethod.querySelector('option[value="Digital"]').textContent = 'Digital (not available)';
-            } else {
-                deliveryMethod.querySelector('option[value="Digital"]').disabled = false;
-                deliveryMethod.querySelector('option[value="Digital"]').textContent = 'Digital';
+                // Only set a default when there's no current selection —
+                // do not override an explicit user choice (fixes files disappearing).
+                if (!deliveryMethod.value) {
+                    deliveryMethod.value = 'Physical';
+                }
+                if (!selectedDocument.is_digital_available) {
+                    deliveryMethod.querySelector('option[value="Digital"]').disabled = true;
+                    deliveryMethod.querySelector('option[value="Digital"]').textContent = 'Digital (not available)';
+                } else {
+                    deliveryMethod.querySelector('option[value="Digital"]').disabled = false;
+                    deliveryMethod.querySelector('option[value="Digital"]').textContent = 'Digital';
+                }
             }
-        }
     }
 
     updateFileUploadVisibility();
