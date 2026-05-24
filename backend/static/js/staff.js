@@ -35,6 +35,11 @@ function escapeHtml(value) {
     }[char]));
 }
 
+// Track whether a staff upload input currently has a file selected or an upload
+// is in progress. When true we skip the periodic refresh to avoid wiping the
+// file input DOM and losing the selected File object.
+window.staffUploadHasSelection = false;
+
 function formatEventTime(event) {
     if (event.start_time && event.end_time) {
         return `${event.start_time} - ${event.end_time}`;
@@ -460,6 +465,34 @@ async function uploadDigitalDocument(requestId) {
     const formData = new FormData();
     formData.append('digital_document', file);
 
+    // Mark that an upload is in progress / selection exists to avoid poller
+    window.staffUploadHasSelection = true;
+
+    (async () => {
+        try {
+            const response = await fetch(`/api/staff/requests/${requestId}/digital-document`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to upload digital document');
+            showAlert(result.message, 'success');
+            // Refresh requests after successful upload
+            window.staffUploadHasSelection = false;
+            await loadStaffRequests();
+        } catch (error) {
+            console.error(error);
+            showAlert(error.message || 'Unable to upload digital document', 'danger');
+        } finally {
+            // Ensure flag is cleared when done
+            window.staffUploadHasSelection = false;
+        }
+    })();
+}
+
+    const formData = new FormData();
+    formData.append('digital_document', file);
+
     try {
         const response = await fetch(`/api/staff/requests/${requestId}/digital-document`, {
             method: 'POST',
@@ -500,14 +533,20 @@ async function loadStaffRequests() {
     const tableBody = document.getElementById('staffRequestsBody');
     if (!tableBody) return;
 
+    // If a staff upload input currently has a file selected or an upload is
+    // in progress, skip refreshing the list to avoid recreating and clearing
+    // the file input element (which would drop the user's selection).
+    if (window.staffUploadHasSelection) {
+        return;
+    }
+
     try {
         const requests = await fetchJson('/api/staff/requests');
         if (requests.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="8">No pending requests to process.</td></tr>';
-            return;
-        }
+        } else {
 
-        tableBody.innerHTML = requests.map(req => `
+            tableBody.innerHTML = requests.map(req => `
             <tr>
                 <td>${req.request_id}</td>
                 <td>${escapeHtml(req.resident_name || req.requester_name || req.name || 'Resident')}</td>
@@ -530,7 +569,19 @@ async function loadStaffRequests() {
                     <button class="btn btn-primary" onclick="updateRequestStatus(${req.request_id}, 'Ready')">Mark Ready</button>
                 </td>
             </tr>
-        `).join('');
+            `).join('');
+
+            // Attach change listeners to the inline file inputs so we can
+            // detect when a staff member selects a file and temporarily
+            // suspend automatic refreshes until upload completes or they
+            // clear the selection.
+            const inputs = tableBody.querySelectorAll('input[id^="digitalDocument-"]');
+            inputs.forEach(input => {
+                input.addEventListener('change', () => {
+                    window.staffUploadHasSelection = !!(input.files && input.files.length);
+                });
+            });
+        }
     } catch (error) {
         console.error('Error loading staff requests:', error);
         tableBody.innerHTML = '<tr><td colspan="9">Unable to load requests.</td></tr>';
