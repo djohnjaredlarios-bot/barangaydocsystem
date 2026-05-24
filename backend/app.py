@@ -1627,122 +1627,130 @@ def get_request_files(req_id):
 
 @app.route('/api/staff/requests/<int:req_id>/digital-document', methods=['POST'])
 def upload_digital_document(req_id):
-    if 'user_id' not in session or session.get('role') != 'Staff':
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    uploaded_file = request.files.get('digital_document')
-    if not uploaded_file or not uploaded_file.filename:
-        return jsonify({'error': 'Please choose a file to upload.'}), 400
-
-    if not is_allowed_digital_file(uploaded_file.filename):
-        return jsonify({'error': 'Allowed file types: PDF, PNG, JPG, DOC, DOCX.'}), 400
-
-    cursor = get_db().cursor()
-    cursor.execute('SELECT request_id, delivery_method, user_id, staff_id FROM request WHERE request_id = ?', (req_id,))
-    request_row = cursor.fetchone()
-    if not request_row:
-        cursor.close()
-        return jsonify({'error': 'Request not found'}), 404
-    if request_row['delivery_method'] != 'Digital':
-        cursor.close()
-        return jsonify({'error': 'Digital document uploads are only for digital requests.'}), 400
-
-    is_staff = session.get('role') == 'Staff' and 'user_id' in session
-    is_owner = session.get('user_id') == request_row['user_id']
-    if not (is_staff or is_owner):
-        cursor.close()
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    ensure_upload_folder()
-    original_name = secure_filename(uploaded_file.filename)
-    filename = f'{req_id}_{uuid.uuid4().hex}_{original_name}'
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    uploaded_file.save(file_path)
-    file_url = url_for('download_digital_document', filename=filename)
-
     try:
-        cursor.execute(
-            '''
-            INSERT INTO digital_document (request_id, file_path, file_url)
-            VALUES (?, ?, ?)
-            ''',
-            (req_id, file_path, file_url)
-        )
-        cursor.execute(
-            '''
-            UPDATE request
-            SET status = 'Ready', staff_id = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE request_id = ?
-            ''',
-            (session['user_id'] if is_staff else request_row['staff_id'], req_id)
-        )
-        get_db().commit()
-        return jsonify({
-            'message': 'Digital document uploaded.',
-            'request': fetch_request_by_id(req_id)
-        }), 201
-    finally:
-        cursor.close()
+        if 'user_id' not in session or session.get('role') != 'Staff':
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        uploaded_file = request.files.get('digital_document')
+        if not uploaded_file or not uploaded_file.filename:
+            return jsonify({'error': 'Please choose a file to upload.'}), 400
+
+        if not is_allowed_digital_file(uploaded_file.filename):
+            return jsonify({'error': 'Allowed file types: PDF, PNG, JPG, DOC, DOCX.'}), 400
+
+        cursor = get_db().cursor()
+        cursor.execute('SELECT request_id, delivery_method, user_id, staff_id FROM request WHERE request_id = ?', (req_id,))
+        request_row = cursor.fetchone()
+        if not request_row:
+            cursor.close()
+            return jsonify({'error': 'Request not found'}), 404
+        if request_row['delivery_method'] != 'Digital':
+            cursor.close()
+            return jsonify({'error': 'Digital document uploads are only for digital requests.'}), 400
+
+        is_staff = session.get('role') == 'Staff' and 'user_id' in session
+        is_owner = session.get('user_id') == request_row['user_id']
+        if not (is_staff or is_owner):
+            cursor.close()
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        ensure_upload_folder()
+        original_name = secure_filename(uploaded_file.filename)
+        filename = f'{req_id}_{uuid.uuid4().hex}_{original_name}'
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        uploaded_file.save(file_path)
+        file_url = url_for('download_digital_document', filename=filename)
+
+        try:
+            cursor.execute(
+                '''
+                INSERT INTO digital_document (request_id, file_path, file_url)
+                VALUES (?, ?, ?)
+                ''',
+                (req_id, file_path, file_url)
+            )
+            cursor.execute(
+                '''
+                UPDATE request
+                SET status = 'Ready', staff_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE request_id = ?
+                ''',
+                (session['user_id'] if is_staff else request_row['staff_id'], req_id)
+            )
+            get_db().commit()
+            return jsonify({
+                'message': 'Digital document uploaded.',
+                'request': fetch_request_by_id(req_id)
+            }), 201
+        finally:
+            cursor.close()
+    except Exception as e:
+        app.logger.error(f'Error uploading digital document: {str(e)}', exc_info=True)
+        return jsonify({'error': 'Failed to upload digital document. Please try again.'}), 500
 
 
 @app.route('/api/requests/<int:req_id>/digital-document', methods=['POST'])
 def upload_resident_digital_document(req_id):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    uploaded_file = request.files.get('digital_document')
-    if not uploaded_file or not uploaded_file.filename:
-        return jsonify({'error': 'Please choose a file to upload.'}), 400
-
-    if not is_allowed_digital_file(uploaded_file.filename):
-        return jsonify({'error': 'Allowed file types: PDF, PNG, JPG, DOC, DOCX.'}), 400
-
-    cursor = get_db().cursor()
-    cursor.execute('SELECT request_id, delivery_method, user_id, staff_id FROM request WHERE request_id = ?', (req_id,))
-    request_row = cursor.fetchone()
-    if not request_row:
-        cursor.close()
-        return jsonify({'error': 'Request not found'}), 404
-    if request_row['delivery_method'] != 'Digital':
-        cursor.close()
-        return jsonify({'error': 'Digital document uploads are only for digital requests.'}), 400
-
-    is_staff = session.get('role') == 'Staff' and 'user_id' in session
-    is_owner = session.get('user_id') == request_row['user_id']
-    if not (is_staff or is_owner):
-        cursor.close()
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    ensure_upload_folder()
-    original_name = secure_filename(uploaded_file.filename)
-    filename = f'{req_id}_{uuid.uuid4().hex}_{original_name}'
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    uploaded_file.save(file_path)
-    file_url = url_for('download_digital_document', filename=filename)
-
     try:
-        cursor.execute(
-            '''
-            INSERT INTO digital_document (request_id, file_path, file_url)
-            VALUES (?, ?, ?)
-            ''',
-            (req_id, file_path, file_url)
-        )
-        cursor.execute(
-            '''
-            UPDATE request
-            SET status = 'Ready', staff_id = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE request_id = ?
-            ''',
-            (session['user_id'] if is_staff else request_row['staff_id'], req_id)
-        )
-        get_db().commit()
-        return jsonify({
-            'message': 'Digital document uploaded.',
-            'request': fetch_request_by_id(req_id)
-        }), 201
-    finally:
-        cursor.close()
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        uploaded_file = request.files.get('digital_document')
+        if not uploaded_file or not uploaded_file.filename:
+            return jsonify({'error': 'Please choose a file to upload.'}), 400
+
+        if not is_allowed_digital_file(uploaded_file.filename):
+            return jsonify({'error': 'Allowed file types: PDF, PNG, JPG, DOC, DOCX.'}), 400
+
+        cursor = get_db().cursor()
+        cursor.execute('SELECT request_id, delivery_method, user_id, staff_id FROM request WHERE request_id = ?', (req_id,))
+        request_row = cursor.fetchone()
+        if not request_row:
+            cursor.close()
+            return jsonify({'error': 'Request not found'}), 404
+        if request_row['delivery_method'] != 'Digital':
+            cursor.close()
+            return jsonify({'error': 'Digital document uploads are only for digital requests.'}), 400
+
+        is_staff = session.get('role') == 'Staff' and 'user_id' in session
+        is_owner = session.get('user_id') == request_row['user_id']
+        if not (is_staff or is_owner):
+            cursor.close()
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        ensure_upload_folder()
+        original_name = secure_filename(uploaded_file.filename)
+        filename = f'{req_id}_{uuid.uuid4().hex}_{original_name}'
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        uploaded_file.save(file_path)
+        file_url = url_for('download_digital_document', filename=filename)
+
+        try:
+            cursor.execute(
+                '''
+                INSERT INTO digital_document (request_id, file_path, file_url)
+                VALUES (?, ?, ?)
+                ''',
+                (req_id, file_path, file_url)
+            )
+            cursor.execute(
+                '''
+                UPDATE request
+                SET status = 'Ready', staff_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE request_id = ?
+                ''',
+                (session['user_id'] if is_staff else request_row['staff_id'], req_id)
+            )
+            get_db().commit()
+            return jsonify({
+                'message': 'Digital document uploaded.',
+                'request': fetch_request_by_id(req_id)
+            }), 201
+        finally:
+            cursor.close()
+    except Exception as e:
+        app.logger.error(f'Error uploading resident digital document: {str(e)}', exc_info=True)
+        return jsonify({'error': 'Failed to upload digital document. Please try again.'}), 500
 
 
 @app.route('/uploads/digital-documents/<path:filename>')
