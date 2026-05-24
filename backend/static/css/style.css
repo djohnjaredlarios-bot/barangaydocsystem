@@ -21,8 +21,10 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)),
-        url('/api/background-image') no-repeat center center fixed;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), var(--background-image-url, url('/static/images/background.jpg'));
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-attachment: fixed;
     background-size: cover;
     color: var(--text-dark);
     line-height: 1.6;

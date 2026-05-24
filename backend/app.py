@@ -2,7 +2,7 @@ import os
 import json
 import sqlite3
 import uuid
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g, Response, stream_with_context, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import mimetypes
@@ -693,22 +693,12 @@ else:
 # Routes
 @app.route('/api/background-image')
 def serve_background():
-    """Serve the background image directly from Flask to bypass gunicorn static file issues."""
-    from flask import send_from_directory
-    # Use app.root_path which is the directory where app.py is located
-    images_dir = os.path.join(app.root_path, 'static', 'images')
-    try:
-        if not os.path.isdir(images_dir):
-            app.logger.error(f'Images directory not found: {images_dir}')
-            return '', 404
-        image_file = os.path.join(images_dir, 'background.jpg')
-        if not os.path.isfile(image_file):
-            app.logger.error(f'Background image not found: {image_file}')
-            return '', 404
-        return send_from_directory(images_dir, 'background.jpg', mimetype='image/jpeg')
-    except Exception as e:
-        app.logger.error(f'Error serving background image: {e}')
-        return '', 500
+    """Serve the background image directly from the backend static images folder."""
+    image_path = os.path.join(app.static_folder, 'images', 'background.jpg')
+    if os.path.exists(image_path):
+        return send_file(image_path, mimetype='image/jpeg')
+    app.logger.error(f'Background image not found at {image_path}')
+    return '', 404
 
 
 @app.route('/')
