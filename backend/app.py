@@ -691,6 +691,16 @@ else:
 
 
 # Routes
+@app.route('/api/background-image')
+def serve_background():
+    """Serve the background image directly from Flask to bypass gunicorn static file issues."""
+    from flask import send_file
+    image_path = os.path.join(static_dir, 'images', 'background.jpg')
+    if not os.path.exists(image_path):
+        return '', 404
+    return send_file(image_path, mimetype='image/jpeg', cache_timeout=86400)
+
+
 @app.route('/')
 def index():
     # Serve the landing page for the application entry point.

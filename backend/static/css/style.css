@@ -22,7 +22,7 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)),
-        url('/static/images/background.jpg') no-repeat center center fixed;
+        url('/api/background-image') no-repeat center center fixed;
     background-size: cover;
     color: var(--text-dark);
     line-height: 1.6;
