@@ -510,7 +510,7 @@ async function loadStaffRequests() {
         tableBody.innerHTML = requests.map(req => `
             <tr>
                 <td>${req.request_id}</td>
-                <td>${escapeHtml(req.name || req.requester_name || 'Resident')}</td>
+                <td>${escapeHtml(req.resident_name || req.requester_name || req.name || 'Resident')}</td>
                 <td>${escapeHtml(req.document_name)}</td>
                 <td>
                     ${req.digital_file_url ? `<a class="btn btn-sm btn-primary" href="${escapeHtml(req.digital_file_url)}" target="_blank">View</a>` : 'N/A'}

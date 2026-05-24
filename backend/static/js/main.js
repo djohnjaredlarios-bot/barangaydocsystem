@@ -1052,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadEvents();
     }
 
-    if (document.getElementById('announcementsCalendar') || document.getElementById('staffAnnouncementsList')) {
+    if (document.getElementById('announcementsCalendar') || document.getElementById('announcementsList') || document.getElementById('staffAnnouncementsList')) {
         loadAnnouncements();
     }
 

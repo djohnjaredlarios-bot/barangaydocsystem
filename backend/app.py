@@ -769,6 +769,20 @@ def submit_request():
 
     cursor = get_db().cursor()
     try:
+        cursor.execute('SELECT is_digital_available FROM document WHERE document_id = ?', (document_id,))
+        document = cursor.fetchone()
+        if not document:
+            cursor.close()
+            return jsonify({'error': 'Invalid document_id'}), 400
+
+        if delivery_method == 'Digital':
+            if not document['is_digital_available']:
+                cursor.close()
+                return jsonify({'error': 'This document does not support digital delivery.'}), 400
+            if not uploaded_file or not uploaded_file.filename:
+                cursor.close()
+                return jsonify({'error': 'Digital delivery requires uploading a supporting document.'}), 400
+
         cursor.execute('SELECT requirement_name FROM document_requirement WHERE document_id = ?', (document_id,))
         required_detail_names = [row['requirement_name'] for row in cursor.fetchall()]
 
@@ -1511,7 +1525,7 @@ def staff_dashboard():
     cursor = get_db().cursor()
     cursor.execute(
         '''
-        SELECT r.*, d.document_name, u.name, u.email, a.appointment_date, a.time_slot,
+        SELECT r.*, d.document_name, COALESCE(r.requester_name, u.name) AS resident_name, u.email, a.appointment_date, a.time_slot,
                dd.file_url AS digital_file_url,
                CASE WHEN r.delivery_method = 'Digital' AND dd.file_url IS NULL THEN 1 ELSE 0 END AS requires_upload,
                (SELECT COUNT(*) FROM request_attachment ra WHERE ra.request_id = r.request_id) AS attachment_count
@@ -1541,7 +1555,7 @@ def get_staff_requests():
     cursor = get_db().cursor()
     cursor.execute(
         '''
-        SELECT r.*, d.document_name, u.name, u.email, a.appointment_date, a.time_slot,
+        SELECT r.*, d.document_name, COALESCE(r.requester_name, u.name) AS resident_name, u.email, a.appointment_date, a.time_slot,
                dd.file_url AS digital_file_url,
                CASE WHEN r.delivery_method = 'Digital' AND dd.file_url IS NULL THEN 1 ELSE 0 END AS requires_upload,
                (SELECT COUNT(*) FROM request_attachment ra WHERE ra.request_id = r.request_id) AS attachment_count
