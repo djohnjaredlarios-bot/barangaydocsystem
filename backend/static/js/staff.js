@@ -507,23 +507,6 @@ async function uploadDigitalDocument(requestId) {
     })();
 }
 
-    const formData = new FormData();
-    formData.append('digital_document', file);
-
-    try {
-        const response = await fetch(`/api/staff/requests/${requestId}/digital-document`, {
-            method: 'POST',
-            body: formData
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Unable to upload digital document');
-        showAlert(result.message, 'success');
-        loadStaffRequests();
-    } catch (error) {
-        console.error(error);
-        showAlert(error.message, 'danger');
-    }
-
 function renderDigitalUploadAction(req) {
     if (req.delivery_method !== 'Digital' && req.requires_upload !== 1) return '';
 
@@ -619,12 +602,12 @@ async function renderPickupAppointmentsBlock() {
         });
         clearTimeout(timeoutId);
         
-        const data = await response.json();
         if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
             throw new Error(data.error || `API error: ${response.status}`);
         }
         
-        const appointments = data;
+        const appointments = await response.json();
         if (appointments.length === 0) {
             block.innerHTML = '<p>No scheduled pickup appointments.</p>';
             return;
