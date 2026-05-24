@@ -491,14 +491,27 @@ async function uploadDigitalDocument(requestId) {
                 method: 'POST',
                 body: formData
             });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Unable to upload digital document');
-            showAlert(result.message, 'success');
+            
+            // Try to parse JSON response
+            let result;
+            try {
+                result = await response.json();
+            } catch (parseError) {
+                // If JSON parsing fails, provide a helpful error message
+                console.error('Failed to parse response:', parseError);
+                throw new Error(`Server returned invalid response (Status: ${response.status})`);
+            }
+            
+            if (!response.ok) {
+                throw new Error(result.error || `Upload failed with status ${response.status}`);
+            }
+            
+            showAlert(result.message || 'Digital document uploaded successfully.', 'success');
             // Refresh requests after successful upload
             window.staffUploadHasSelection = false;
             await loadStaffRequests();
         } catch (error) {
-            console.error(error);
+            console.error('Error uploading document:', error);
             showAlert(error.message || 'Unable to upload digital document', 'danger');
         } finally {
             // Ensure flag is cleared when done
