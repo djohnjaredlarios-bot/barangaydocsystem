@@ -1006,11 +1006,7 @@ async function handleLogin(event) {
 
         const loginData = await response.json();
         if (response.ok) {
-            if (loginData.redirect_to) {
-                window.location.href = loginData.redirect_to;
-                return;
-            }
-            window.location.href = '/resident/dashboard';
+            window.location.href = loginData.redirect_to || '/login';
         } else {
             showAlert(loginData.error || 'Invalid email or password', 'danger');
         }
@@ -1020,53 +1016,10 @@ async function handleLogin(event) {
     }
 }
 
-async function handleRegister(event) {
-    event.preventDefault();
-    const name = document.getElementById('name').value;
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    const contact = document.getElementById('contact').value;
-    const address = document.getElementById('address').value;
-
-    try {
-        const response = await fetch('/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name,
-                email,
-                password,
-                contact_number: contact,
-                address
-            })
-        });
-
-        const registerData = await response.json();
-        if (response.status === 201) {
-            showAlert('Registration successful! Redirecting to login...', 'success');
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 2000);
-        } else if (response.status === 409) {
-            showAlert(registerData.error || 'Email already exists', 'danger');
-        } else {
-            showAlert(registerData.error || 'Registration error', 'danger');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showAlert('Registration error', 'danger');
-    }
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
-    }
-
-    const registerForm = document.getElementById('registerForm');
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleRegister);
     }
 
     const documentSelect = document.getElementById('documentSelect');

@@ -1,4 +1,4 @@
-/* Barangay System - Global Styles */
+/* Barangay Local Dashboard and Document Request System - Global Styles */
 
 :root {
     --primary-color: #8B0000;
@@ -473,4 +473,125 @@ tr:hover {
     th, td {
         padding: 0.5rem;
     }
+}
+
+/* Mobile / Tablet improvements */
+img, video, iframe {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Larger touch targets */
+.btn {
+    min-height: 48px;
+    padding: 0.85rem 1rem;
+}
+
+/* Sidebar becomes a horizontal scroller on smaller screens */
+@media (max-width: 900px) {
+    .sidebar {
+        position: relative;
+        min-height: auto;
+        display: flex;
+        flex-direction: row;
+        gap: 0.25rem;
+        overflow-x: auto;
+        padding: 0.5rem;
+    }
+
+    .sidebar a {
+        display: inline-flex;
+        padding: 0.6rem 0.9rem;
+        white-space: nowrap;
+        border-left: none;
+        border-radius: 6px;
+        margin-right: 0.25rem;
+    }
+
+    .modal-content {
+        width: 95%;
+        max-width: 720px;
+        padding: 1rem;
+    }
+
+    .page-header {
+        align-items: center;
+    }
+}
+
+@media (max-width: 480px) {
+    nav {
+        padding: 0.75rem 1rem;
+    }
+
+    .container {
+        padding: 0.75rem;
+    }
+
+    .card {
+        padding: 1rem;
+    }
+
+    .card-header {
+        padding: 0.75rem;
+    }
+}
+
+/* Modern UI enhancements */
+:root {
+    --card-radius: 12px;
+    --control-radius: 8px;
+}
+
+html, body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+nav {
+    padding: 1rem 1.25rem;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+nav .logo {
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.card {
+    border-radius: var(--card-radius);
+    box-shadow: 0 6px 20px rgba(18,18,18,0.06);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+    border-radius: var(--control-radius);
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+.btn {
+    border-radius: 8px;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.btn:active {
+    transform: translateY(1px) scale(0.998);
+}
+
+.btn-primary {
+    background-image: linear-gradient(180deg, var(--primary-color), var(--secondary-color));
+    box-shadow: 0 6px 18px rgba(139,0,0,0.12);
+}
+
+.table-full th,
+.table-full td {
+    padding: 0.75rem;
+}
+
+.muted {
+    color: var(--text-light);
 }

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barangay Local Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=asset_version) }}">
+</head>
+<body>
+    <header class="landing-header">
+        <div class="landing-nav container">
+            <div class="brand">
+                <div class="brand-text">
+                    <div class="brand-mark">Barangay<strong>Connect</strong></div>
+                    <div class="brand-subtitle">Local Dashboard</div>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <main class="landing-page container" id="home">
+        <section class="hero-section">
+            <div class="hero-copy">
+                <span class="eyebrow">Digital Barangay Services</span>
+                <h1>Fast, accessible, and connected community services for everyone.</h1>
+                <p>Request documents, receive announcements, and manage barangay operations efficiently through a centralized digital platform.</p>
+
+                <div class="hero-actions">
+                    <a href="{{ url_for('civilian_dashboard') }}" class="btn btn-primary hero-btn">Go to Civilian Dashboard</a>
+                    <a href="{{ url_for('login') }}" class="btn btn-secondary hero-btn">Staff Login</a>
+                </div>
+
+                <div class="hero-highlights">
+                    <div class="hero-highlight">
+                        <strong>Better Services</strong>
+                        <span>For every resident</span>
+                    </div>
+                    <div class="hero-highlight">
+                        <strong>Secure & Reliable</strong>
+                        <span>Your data is protected</span>
+                    </div>
+                    <div class="hero-highlight">
+                        <strong>Save Time</strong>
+                        <span>Fast and efficient</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-preview-card">
+                <div class="preview-card-inner">
+                    <div class="preview-top-bar">
+                        <div>
+                            <p class="preview-label">Welcome back,</p>
+                            <h3>Barangay Staff</h3>
+                        </div>
+                        <button class="btn btn-outline">Staff Login</button>
+                    </div>
+
+                    <div class="preview-metrics">
+                        <div class="metric-box">
+                            <span>Total Requests</span>
+                            <strong>128</strong>
+                        </div>
+                        <div class="metric-box">
+                            <span>Pending</span>
+                            <strong>32</strong>
+                        </div>
+                        <div class="metric-box">
+                            <span>Announcements</span>
+                            <strong>14</strong>
+                        </div>
+                        <div class="metric-box">
+                            <span>Schedules</span>
+                            <strong>8</strong>
+                        </div>
+                    </div>
+
+                    <div class="preview-list-grid">
+                        <div class="preview-list-card">
+                            <h4>Recent Requests</h4>
+                            <ul>
+                                <li>Barangay Clearance <span class="status pending">Pending</span></li>
+                                <li>Business Permit <span class="status review">For Review</span></li>
+                                <li>Certificate of Residency <span class="status approved">Approved</span></li>
+                            </ul>
+                        </div>
+                        <div class="preview-list-card">
+                            <h4>Announcements</h4>
+                            <ul>
+                                <li>Community Clean-Up Drive <span class="status active">Active</span></li>
+                                <li>Barangay Assembly Meeting <span class="status active">Active</span></li>
+                                <li>Health Check-Up Program <span class="status active">Active</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="service-section" id="services">
+            <div class="section-header">
+                <p class="section-label">Services We Offer</p>
+                <h2>Everything you need in one platform</h2>
+            </div>
+
+            <div class="service-grid">
+                <article class="service-card">
+                    <div class="service-icon">📄</div>
+                    <h3>Document Requests</h3>
+                    <p>Request barangay documents online and track their status in real-time.</p>
+                </article>
+                <article class="service-card">
+                    <div class="service-icon">📢</div>
+                    <h3>Announcements</h3>
+                    <p>Stay updated with the latest news, events, and important notices.</p>
+                </article>
+                <article class="service-card">
+                    <div class="service-icon">🗓️</div>
+                    <h3>Scheduling</h3>
+                    <p>Book appointments and reserve schedules for barangay activities.</p>
+                </article>
+                <article class="service-card">
+                    <div class="service-icon">👥</div>
+                    <h3>Resident Records</h3>
+                    <p>Manage and view resident information securely and efficiently.</p>
+                </article>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

@@ -1,4 +1,4 @@
-# Barangay Document Request and Appointment System
+# Barangay Local Dashboard and Document Request System
 
 A Flask-based web application for barangay residents to submit document requests, book appointments, and allow staff/admin to manage requests.
 

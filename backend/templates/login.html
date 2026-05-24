@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barangay Document Request System - Login</title>
+    <title>Barangay Local Dashboard and Document Request System - Login</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=asset_version) }}">
     <style>
         body {
-            background: linear-gradient(135deg, #8B0000 0%, #DC143C 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -19,8 +18,8 @@
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            width: 100%;
-            max-width: 400px;
+            width: min(100%, 420px);
+            max-width: 420px;
         }
         
         .login-header {
@@ -46,29 +45,34 @@
         .login-form .btn {
             margin-top: 1rem;
         }
-        
-        .register-link {
-            text-align: center;
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid #ddd;
-        }
-        
-        .register-link a {
-            color: #8B0000;
-            text-decoration: none;
-            font-weight: 500;
-        }
-        
-        .register-link a:hover {
-            text-decoration: underline;
+
+        @media (max-width: 640px) {
+            body {
+                padding: 1.25rem;
+                justify-content: flex-start;
+                align-items: flex-start;
+            }
+
+            .login-container {
+                margin-top: 2rem;
+                padding: 1.5rem;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            }
+
+            .login-header h1 {
+                font-size: 1.65rem;
+            }
+
+            .login-header p {
+                font-size: 0.95rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-header">
-            <h1>Barangay System</h1>
+            <h1>Barangay Local Dashboard</h1>
             <p>Document Request & Appointment Management</p>
         </div>
         
@@ -85,12 +89,6 @@
             
             <button type="submit" class="btn btn-primary btn-block">Log In</button>
         </form>
-        
-        {% if not staff_login %}
-        <div class="register-link">
-            Don't have an account? <a href="{{ url_for('register') }}">Register here</a>
-        </div>
-        {% endif %}
     </div>
     
     <script src="{{ url_for('static', filename='js/main.js', v=asset_version) }}"></script>

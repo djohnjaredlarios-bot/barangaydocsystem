@@ -2,7 +2,7 @@ import os
 import json
 import sqlite3
 import uuid
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, g, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g, Response, stream_with_context
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import mimetypes
@@ -11,15 +11,9 @@ from datetime import datetime, date, timedelta
 # DB type (sqlite or mysql)
 DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 
-static_dir = os.path.join(os.path.dirname(__file__), 'static')
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-app = Flask(__name__, static_folder=None, template_folder=template_dir)
-
-# Serve static assets explicitly so mounted deploy platforms always resolve
-# backend/static correctly, even when Flask app roots are proxied or hosted.
-@app.route('/static/<path:filename>', endpoint='static')
-def serve_static(filename):
-    return send_from_directory(static_dir, filename)
+app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder=template_dir)
+static_dir = app.static_folder
 
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'change-this-secret')
 # Limit uploads to 10 MB
@@ -699,8 +693,12 @@ else:
 # Routes
 @app.route('/')
 def index():
-    # Serve the homepage from Flask templates so `url_for('static', ...)`
-    # is used for asset URLs (more robust in production environments).
+    # Serve the landing page for the application entry point.
+    return render_template('landing.html')
+
+
+@app.route('/civilian/dashboard')
+def civilian_dashboard():
     return render_template('homepage.html')
 
 
@@ -715,16 +713,12 @@ def login():
         cursor.execute('SELECT * FROM user WHERE email = ?', (email,))
         user = cursor.fetchone()
 
-        if user and check_password_hash(user['password'], password):
+        if user and check_password_hash(user['password'], password) and user['role'] in ('Staff', 'Admin'):
             session['user_id'] = user['user_id']
             session['role'] = user['role']
             session['name'] = user['name']
 
-            redirect_url = url_for('resident_dashboard')
-            if user['role'] == 'Admin':
-                redirect_url = url_for('admin_dashboard')
-            elif user['role'] == 'Staff':
-                redirect_url = url_for('staff_dashboard')
+            redirect_url = url_for('staff_dashboard')
 
             if request.is_json:
                 return jsonify({'redirect_to': redirect_url}), 200
@@ -735,37 +729,6 @@ def login():
     return render_template('login.html')
 
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        data = request.json if request.is_json else request.form
-        name = data.get('name')
-        email = data.get('email')
-        password = data.get('password')
-        contact_number = data.get('contact_number')
-        address = data.get('address')
-
-        cursor = get_db().cursor()
-
-        try:
-            hashed_password = generate_password_hash(password)
-            cursor.execute(
-                '''
-                INSERT INTO user (name, email, password, role, contact_number, address)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ''',
-                (name, email, hashed_password, 'Resident', contact_number, address)
-            )
-            get_db().commit()
-            return jsonify({'message': 'Registration successful'}), 201
-        except sqlite3.IntegrityError:
-            return jsonify({'error': 'Email already exists'}), 409
-        finally:
-            cursor.close()
-
-    return render_template('register.html')
-
-
 @app.route('/logout')
 def logout():
     session.clear()
@@ -773,29 +736,6 @@ def logout():
 
 
 # Resident routes
-@app.route('/resident/dashboard')
-def resident_dashboard():
-    if 'user_id' not in session or session.get('role') != 'Resident':
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-    cursor = get_db().cursor()
-
-    cursor.execute(
-        '''
-        SELECT r.*, d.document_name
-        FROM request r
-        JOIN document d ON r.document_id = d.document_id
-        WHERE r.user_id = ?
-        ORDER BY r.created_at DESC
-        ''',
-        (user_id,)
-    )
-    requests = cursor.fetchall()
-    cursor.close()
-    return render_template('resident_dashboard.html', requests=requests)
-
-
 @app.route('/resident/submit-request', methods=['POST'])
 def submit_request():
     if 'user_id' not in session:
@@ -1872,29 +1812,6 @@ def process_request(req_id):
 
 
 # Admin routes
-@app.route('/admin/dashboard')
-def admin_dashboard():
-    if 'user_id' not in session or session.get('role') != 'Admin':
-        return redirect(url_for('login'))
-
-    cursor = get_db().cursor()
-    cursor.execute('SELECT COUNT(*) as total_users FROM user WHERE role = ?', ('Resident',))
-    total_residents = cursor.fetchone()['total_users']
-    cursor.execute('SELECT COUNT(*) as total_requests FROM request')
-    total_requests = cursor.fetchone()['total_requests']
-    cursor.execute('SELECT COUNT(*) as pending FROM request WHERE status = ?', ('Pending',))
-    pending = cursor.fetchone()['pending']
-    cursor.close()
-
-    metrics = {
-        'total_residents': total_residents,
-        'total_requests': total_requests,
-        'pending_requests': pending
-    }
-
-    return render_template('admin_dashboard.html', metrics=metrics)
-
-
 @app.route('/api/admin/metrics')
 def get_metrics():
     cursor = get_db().cursor()
