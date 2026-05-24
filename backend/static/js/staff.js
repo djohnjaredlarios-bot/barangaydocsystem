@@ -110,7 +110,16 @@ function renderStaffEventList(events) {
 
 async function loadStaffEvents() {
     try {
-        const response = await fetch('/api/events');
+        // Add timeout wrapper to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch('/api/events', {
+            signal: controller.signal,
+            cache: 'no-store'
+        });
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
             throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
@@ -200,7 +209,12 @@ async function loadStaffEvents() {
         renderStaffEventList(events);
     } catch (error) {
         console.error('Error loading staff events:', error);
-        showAlert('Unable to load staff events', 'danger');
+        const errorMsg = error.name === 'AbortError' ? 'Request timeout' : error.message;
+        const container = document.getElementById('staffEventsCalendar');
+        if (container) {
+            container.innerHTML = `<div style="color:#d9534f; padding:1rem;">Unable to load events: ${escapeHtml(errorMsg)}</div>`;
+        }
+        showAlert(`Unable to load staff events: ${errorMsg}`, 'danger');
     }
 }
 
@@ -595,7 +609,22 @@ async function renderPickupAppointmentsBlock() {
     if (!block) return;
 
     try {
-        const appointments = await fetchJson('/api/staff/pickup-appointments');
+        // Add timeout wrapper to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch('/api/staff/pickup-appointments', {
+            signal: controller.signal,
+            cache: 'no-store'
+        });
+        clearTimeout(timeoutId);
+        
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `API error: ${response.status}`);
+        }
+        
+        const appointments = data;
         if (appointments.length === 0) {
             block.innerHTML = '<p>No scheduled pickup appointments.</p>';
             return;
@@ -629,7 +658,8 @@ async function renderPickupAppointmentsBlock() {
         `;
     } catch (error) {
         console.error('Error loading pickup appointments:', error);
-        block.innerHTML = '<p>Unable to load pickup appointments.</p>';
+        const errorMsg = error.name === 'AbortError' ? 'Request timeout' : error.message;
+        block.innerHTML = `<p>Unable to load pickup appointments. (${escapeHtml(errorMsg)})</p>`;
     }
 }
 
