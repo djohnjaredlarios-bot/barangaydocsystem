@@ -111,6 +111,9 @@ function renderStaffEventList(events) {
 async function loadStaffEvents() {
     try {
         const response = await fetch('/api/events');
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
         const events = await response.json();
         window.currentStaffEvents = events;
         const container = document.getElementById('staffEventsCalendar');
