@@ -695,16 +695,20 @@ else:
 def serve_background():
     """Serve the background image directly from Flask to bypass gunicorn static file issues."""
     from flask import send_from_directory
-    images_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static', 'images'))
+    # Use app.root_path which is the directory where app.py is located
+    images_dir = os.path.join(app.root_path, 'static', 'images')
     try:
+        if not os.path.isdir(images_dir):
+            app.logger.error(f'Images directory not found: {images_dir}')
+            return '', 404
+        image_file = os.path.join(images_dir, 'background.jpg')
+        if not os.path.isfile(image_file):
+            app.logger.error(f'Background image not found: {image_file}')
+            return '', 404
         return send_from_directory(images_dir, 'background.jpg', mimetype='image/jpeg')
     except Exception as e:
-        # Fallback: try absolute path construction
-        image_path = os.path.join(images_dir, 'background.jpg')
-        if os.path.exists(image_path):
-            return send_from_directory(os.path.dirname(image_path), 'background.jpg', mimetype='image/jpeg')
-        app.logger.error(f'Background image not found at {image_path}: {e}')
-        return '', 404
+        app.logger.error(f'Error serving background image: {e}')
+        return '', 500
 
 
 @app.route('/')
